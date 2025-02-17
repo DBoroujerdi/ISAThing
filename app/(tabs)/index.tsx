@@ -1,74 +1,172 @@
-import { Image, StyleSheet, Platform } from 'react-native';
+import LoadingView from "@/components/LoadingView";
+import { backendService } from "@/services";
+import { useQuery } from "@tanstack/react-query";
+import { Link } from "expo-router";
+import { useCallback, useEffect } from "react";
+import {
+  StyleSheet,
+  Text,
+  SafeAreaView,
+  View,
+  FlatList,
+  Pressable,
+  ViewProps,
+} from "react-native";
+import Animated, {
+  useAnimatedStyle,
+  withTiming,
+  withSequence,
+  useSharedValue,
+  runOnJS,
+} from "react-native-reanimated";
+import { emitter } from "@/services/eventEmitter";
+import Flasher from "@/components/animations/Flasher";
+import Spinner from "@/components/animations/Spinner";
 
-import { HelloWave } from '@/components/HelloWave';
-import ParallaxScrollView from '@/components/ParallaxScrollView';
-import { ThemedText } from '@/components/ThemedText';
-import { ThemedView } from '@/components/ThemedView';
+const formatCurrency = new Intl.NumberFormat("en-GB", {
+  style: "currency",
+  currency: "GBP",
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 0,
+});
+
+type CardProps = {
+  value: string;
+  hint?: string;
+  title: string;
+} & ViewProps;
+
+function Card({ value, hint, title, ...props }: CardProps) {
+  return (
+    <View {...props}>
+      <Text style={styles.cardTitle}>{title}</Text>
+      {hint && <Text style={styles.cardHint}>{hint}</Text>}
+      <Text style={styles.cardValue}>{value}</Text>
+    </View>
+  );
+}
 
 export default function HomeScreen() {
+  const { data: isa } = useQuery({
+    queryKey: ["isa"],
+    queryFn: () => backendService.getISA(),
+  });
+
+  if (!isa) {
+    return <LoadingView />;
+  }
+
   return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
-      headerImage={
-        <Image
-          source={require('@/assets/images/partial-react-logo.png')}
-          style={styles.reactLogo}
+    <SafeAreaView style={styles.container}>
+      <View style={{ flex: 0.85 }}>
+        <Text style={styles.title}>ISA Summary</Text>
+
+        <Flasher eventName="investment-allocated">
+          <Card
+            title="Total ISA Value"
+            value={formatCurrency.format(Math.floor(isa.totalValue))}
+          />
+        </Flasher>
+
+        <Flasher eventName="deposit-created">
+          <Card
+            title="Available Funds"
+            hint="available to invest/allocate"
+            value={formatCurrency.format(Math.floor(isa.availableFunds))}
+          />
+        </Flasher>
+
+        <Text style={styles.title}>Your Investments</Text>
+        <FlatList
+          data={isa.investments}
+          ListEmptyComponent={
+            <Text style={styles.cardValue}>
+              {!isa.totalValue && !isa.availableFunds
+                ? "Make a deposit to start investing"
+                : "Start investing"}
+            </Text>
+          }
+          renderItem={({ item, index }) => (
+            <Card
+              style={styles.card}
+              title={item.fundName}
+              value={formatCurrency.format(Math.floor(item.value))}
+            />
+          )}
+          keyExtractor={(_item, index) => index.toString()}
         />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Welcome!</ThemedText>
-        <HelloWave />
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 1: Try it</ThemedText>
-        <ThemedText>
-          Edit <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> to see changes.
-          Press{' '}
-          <ThemedText type="defaultSemiBold">
-            {Platform.select({
-              ios: 'cmd + d',
-              android: 'cmd + m',
-              web: 'F12'
-            })}
-          </ThemedText>{' '}
-          to open developer tools.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 2: Explore</ThemedText>
-        <ThemedText>
-          Tap the Explore tab to learn more about what's included in this starter app.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>
-        <ThemedText>
-          When you're ready, run{' '}
-          <ThemedText type="defaultSemiBold">npm run reset-project</ThemedText> to get a fresh{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> directory. This will move the current{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> to{' '}
-          <ThemedText type="defaultSemiBold">app-example</ThemedText>.
-        </ThemedText>
-      </ThemedView>
-    </ParallaxScrollView>
+      </View>
+
+      <View style={styles.buttonGroup}>
+        <Link
+          href="/invest"
+          style={[styles.button, { backgroundColor: "blue" }]}
+          asChild
+        >
+          <Pressable>
+            <Text style={styles.buttonText}>Invest</Text>
+          </Pressable>
+        </Link>
+        <Link
+          href="/deposit"
+          style={[styles.button, { backgroundColor: "green" }]}
+          asChild
+        >
+          <Pressable>
+            <Text style={styles.buttonText}>Make Deposit</Text>
+          </Pressable>
+        </Link>
+      </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  titleContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
+  container: {
+    flex: 1,
+    justifyContent: "space-between",
+    margin: 20,
+    marginBottom: 90,
   },
-  stepContainer: {
-    gap: 8,
+  title: {
+    fontSize: 24,
+    fontWeight: "bold",
+    marginBottom: 16,
+  },
+  card: {
+    padding: 16,
+    margin: 5,
+    backgroundColor: "#fff",
+    borderRadius: 8,
+    marginBottom: 12,
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
+  cardTitle: {
+    fontSize: 18,
+    fontWeight: "600",
     marginBottom: 8,
   },
-  reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
-    position: 'absolute',
+  cardHint: {
+    fontSize: 12,
+    color: "#666",
+    marginBottom: 8,
+  },
+  cardValue: {
+    fontSize: 14,
+    color: "#666",
+  },
+  buttonGroup: { flex: 0.15, gap: "10", justifyContent: "center" },
+  buttonText: { color: "#fff", fontSize: 16, fontWeight: "600" },
+  button: {
+    padding: 10,
+    borderRadius: 8,
+    alignItems: "center",
   },
 });
