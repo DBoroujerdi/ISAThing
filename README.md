@@ -9,6 +9,10 @@ Key features:
 - Track total investments and available funds
 - ~~View investment history~~
 
+
+https://github.com/user-attachments/assets/ca82e636-5925-4f26-bc7f-e89025972da0
+
+
 ## Requirements
 
 - Node.js version 20
